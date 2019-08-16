@@ -1,6 +1,7 @@
 """Base Authenticator class and the default PAM Authenticator"""
 # Copyright (c) IPython Development Team.
 # Distributed under the terms of the Modified BSD License.
+import hashlib
 import inspect
 import pipes
 import re
@@ -772,13 +773,17 @@ class LocalAuthenticator(Authenticator):
         """
         name = user.name
         cmd = [arg.replace('USERNAME', name) for arg in self.add_user_cmd]
+        uid = None
         try:
             uid = self.uids[name]
-            cmd += ['--uid', '%d' % uid]
         except AttributeError:
             pass
         except KeyError:
-            self.log.warning("No UID for user %s" % name)
+            self.log.warning("No UID found for user %s" % name)
+            # Generate a uid from the username
+            uid = int(hashlib.sha1(name.encode()).hexdigest(), 16) % (10 ** 8)
+        if uid is not None:
+            cmd += ['--uid', '%d' % uid]
         cmd += [name]
         self.log.info("Creating user: %s", ' '.join(map(pipes.quote, cmd)))
         p = Popen(cmd, stdout=PIPE, stderr=STDOUT)
