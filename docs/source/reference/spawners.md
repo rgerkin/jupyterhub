@@ -25,6 +25,8 @@ Some examples include:
   run without being root, by spawning an intermediate process via `sudo`
 - [BatchSpawner](https://github.com/jupyterhub/batchspawner) for spawning remote
   servers using batch systems
+- [YarnSpawner](https://github.com/jupyterhub/yarnspawner) for spawning notebook
+  servers in YARN containers on a Hadoop cluster
 - [RemoteSpawner](https://github.com/zonca/remotespawner) to spawn notebooks
   and a remote server and tunnel the port via SSH
 
@@ -193,7 +195,7 @@ setup(
 ```
 
 If you have added this metadata to your package,
-users can select your authenticator with the configuration:
+users can select your spawner with the configuration:
 
 ```python
 c.JupyterHub.spawner_class = 'myservice'

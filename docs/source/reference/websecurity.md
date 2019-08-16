@@ -76,7 +76,7 @@ resolves the cross-site issues.
 
 ### Disable user config
 
-If subdomains are not available or not desirable, JupyterHub provides a a
+If subdomains are not available or not desirable, JupyterHub provides a
 configuration option `Spawner.disable_user_config`, which can be set to prevent
 the user-owned configuration files from being loaded. After implementing this
 option, PATHs and package installation and PATHs are the other things that the
@@ -127,3 +127,11 @@ A handy website for testing your deployment is
 
 
 [configurable-http-proxy]: https://github.com/jupyterhub/configurable-http-proxy
+
+## Vulnerability reporting
+
+If you believe you’ve found a security vulnerability in JupyterHub, or any
+Jupyter project, please report it to
+[security@ipython.org](mailto:security@iypthon.org). If you prefer to encrypt
+your security reports, you can use [this PGP public
+key](https://jupyter-notebook.readthedocs.io/en/stable/_downloads/ipython_security.asc).

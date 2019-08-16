@@ -66,7 +66,7 @@ easy to do with RStudio too.
 
 ### University of Colorado Boulder
 
-- (CU Research Computing) CURC 
+- (CU Research Computing) CURC
     - [JupyterHub User Guide](https://www.rc.colorado.edu/support/user-guide/jupyterhub.html)
         - Slurm job dispatched on Crestone compute cluster
         - log troubleshooting
@@ -77,13 +77,17 @@ easy to do with RStudio too.
 - Earth Lab at CU
     - [Tutorial on Parallel R on JupyterHub](https://earthdatascience.org/tutorials/parallel-r-on-jupyterhub/)
 
+### George Washington University
+
+- [Jupyter Hub](http://go.gwu.edu/jupyter) with university single-sign-on. Deployed early 2017.
+
 ### HTCondor
 
 - [HTCondor Python Bindings Tutorial from HTCondor Week 2017 includes information on their JupyterHub tutorials](https://research.cs.wisc.edu/htcondor/HTCondorWeek2017/presentations/TueBockelman_Python.pdf)
 
 ### University of Illinois
 
-- https://datascience.business.illinois.edu
+- https://datascience.business.illinois.edu (currently down; checked 04/26/19)
 
 ### IllustrisTNG Simulation Project
 
@@ -110,7 +114,11 @@ easy to do with RStudio too.
 - [Data Science (DICE) group](https://dice.cs.uni-paderborn.de/)
     - [nbgraderutils](https://github.com/dice-group/nbgraderutils): Use JupyterHub + nbgrader + iJava kernel for online Java exercises. Used in lecture Statistical Natural Language Processing.
 
-### University of Rochester CIRC 
+### Penn State University
+
+- [Press release](https://news.psu.edu/story/523093/2018/05/24/new-open-source-web-apps-available-students-and-faculty): "New open-source web apps available for students and faculty" (but Hub is currently down; checked 04/26/19)
+
+### University of Rochester CIRC
 
 - [JupyterHub Userguide](https://info.circ.rochester.edu/Web_Applications/JupyterHub.html) - Slurm, beehive
 
@@ -126,7 +134,7 @@ easy to do with RStudio too.
 
 - Educational Technology Services - Paul Jamason
     - [jupyterhub.ucsd.edu](https://jupyterhub.ucsd.edu)
-    
+
 ### TACC University of Texas
 
 ### Texas A&M
@@ -134,7 +142,10 @@ easy to do with RStudio too.
 - Kristen Thyng - Oceanography
     - [Teaching with JupyterHub and nbgrader](http://kristenthyng.com/blog/2016/09/07/jupyterhub+nbgrader/)
 
-
+### Elucidata
+  - What's new in Jupyter Notebooks @[Elucidata](https://elucidata.io/):
+      - Using Jupyter Notebooks with Jupyterhub on GCP, managed by GKE
+            - https://medium.com/elucidata/why-you-should-be-using-a-jupyter-notebook-8385a4ccd93d
 
 ## Service Providers
 
@@ -159,6 +170,10 @@ easy to do with RStudio too.
 
 - https://getcarina.com/blog/learning-how-to-whale/
 - http://carolynvanslyck.com/talk/carina/jupyterhub/#/
+
+### Hadoop
+
+- [Deploying JupyterHub on Hadoop](https://jupyterhub-on-hadoop.readthedocs.io)
 
 
 ## Miscellaneous

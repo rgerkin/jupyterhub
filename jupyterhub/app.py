@@ -79,6 +79,8 @@ from .utils import (
     print_ps_info,
     make_ssl_context,
 )
+from .metrics import RUNNING_SERVERS
+from .metrics import TOTAL_USERS
 
 # classes for config
 from .auth import Authenticator, PAMAuthenticator
@@ -277,7 +279,7 @@ class JupyterHub(Application):
                     try:
                         cls = entry_point.load()
                     except Exception as e:
-                        self.log.warning(
+                        self.log.debug(
                             "Failed to load %s entrypoint %r: %r",
                             trait.entry_point_group,
                             key,
@@ -324,6 +326,18 @@ class JupyterHub(Application):
     ).tag(config=True)
     redirect_to_server = Bool(
         True, help="Redirect user to server (if running), instead of control panel."
+    ).tag(config=True)
+    activity_resolution = Integer(
+        30,
+        help="""
+        Resolution (in seconds) for updating activity
+
+        If activity is registered that is less than activity_resolution seconds
+        more recent than the current value,
+        the new value will be ignored.
+
+        This avoids too many writes to the Hub database.
+        """,
     ).tag(config=True)
     last_activity_interval = Integer(
         300, help="Interval (in seconds) at which to update last-activity timestamps."
@@ -578,7 +592,9 @@ class JupyterHub(Application):
 
     @default('logo_file')
     def _logo_file_default(self):
-        return os.path.join(self.data_files_path, 'static', 'images', 'jupyter.png')
+        return os.path.join(
+            self.data_files_path, 'static', 'images', 'jupyterhub-80.png'
+        )
 
     jinja_environment_options = Dict(
         help="Supply extra arguments that will be passed to Jinja environment."
@@ -1410,7 +1426,18 @@ class JupyterHub(Application):
     def init_db(self):
         """Create the database connection"""
 
-        self.log.debug("Connecting to db: %s", self.db_url)
+        urlinfo = urlparse(self.db_url)
+        if urlinfo.password:
+            # avoid logging the database password
+            urlinfo = urlinfo._replace(
+                netloc='{}:[redacted]@{}:{}'.format(
+                    urlinfo.username, urlinfo.hostname, urlinfo.port
+                )
+            )
+            db_log_url = urlinfo.geturl()
+        else:
+            db_log_url = self.db_url
+        self.log.debug("Connecting to db: %s", db_log_url)
         if self.upgrade_db:
             dbutil.upgrade_if_needed(self.db_url, log=self.log)
 
@@ -1420,7 +1447,7 @@ class JupyterHub(Application):
             )
             self.db = self.session_factory()
         except OperationalError as e:
-            self.log.error("Failed to connect to db: %s", self.db_url)
+            self.log.error("Failed to connect to db: %s", db_log_url)
             self.log.debug("Database error was:", exc_info=True)
             if self.db_url.startswith('sqlite:///'):
                 self._check_db_path(self.db_url.split(':///', 1)[1])
@@ -1914,6 +1941,10 @@ class JupyterHub(Application):
             user_summaries = map(_user_summary, self.users.values())
             self.log.debug("Loaded users:\n%s", '\n'.join(user_summaries))
 
+        active_counts = self.users.count_active_users()
+        RUNNING_SERVERS.set(active_counts['active'])
+        TOTAL_USERS.set(len(self.users))
+
     def init_oauth(self):
         base_url = self.hub.base_url
         self.oauth_provider = make_provider(
@@ -2000,6 +2031,7 @@ class JupyterHub(Application):
             db=self.db,
             proxy=self.proxy,
             hub=self.hub,
+            activity_resolution=self.activity_resolution,
             admin_users=self.authenticator.admin_users,
             admin_access=self.admin_access,
             authenticator=self.authenticator,
@@ -2173,7 +2205,6 @@ class JupyterHub(Application):
             self.log.info("Cleaning up PID file %s", self.pid_file)
             os.remove(self.pid_file)
 
-        # finally stop the loop once we are all cleaned up
         self.log.info("...done")
 
     def write_config_file(self):
@@ -2410,23 +2441,39 @@ class JupyterHub(Application):
             pc.start()
 
         self.log.info("JupyterHub is now running at %s", self.proxy.public_url)
+        # Use atexit for Windows, it doesn't have signal handling support
+        if _mswindows:
+            atexit.register(self.atexit)
         # register cleanup on both TERM and INT
-        atexit.register(self.atexit)
         self.init_signal()
 
     def init_signal(self):
-        signal.signal(signal.SIGTERM, self.sigterm)
-        if hasattr(signal, 'SIGINFO'):
-            signal.signal(signal.SIGINFO, self.log_status)
+        loop = asyncio.get_event_loop()
+        for s in (signal.SIGTERM, signal.SIGINT):
+            if not _mswindows:
+                loop.add_signal_handler(
+                    s, lambda s=s: asyncio.ensure_future(self.shutdown_cancel_tasks(s))
+                )
+            else:
+                signal.signal(s, self.win_shutdown_cancel_tasks)
 
-    def log_status(self, signum, frame):
+        if not _mswindows:
+            infosignals = [signal.SIGUSR1]
+            if hasattr(signal, 'SIGINFO'):
+                infosignals.append(signal.SIGINFO)
+            for s in infosignals:
+                loop.add_signal_handler(
+                    s, lambda s=s: asyncio.ensure_future(self.log_status(s))
+                )
+
+    async def log_status(self, sig):
         """Log current status, triggered by SIGINFO (^T in many terminals)"""
-        self.log.debug("Received signal %s[%s]", signum, signal.getsignal(signum))
+        self.log.critical("Received signal %s...", sig.name)
         print_ps_info()
         print_stacks()
 
-    def sigterm(self, signum, frame):
-        self.log.critical("Received SIGTERM, shutting down")
+    def win_shutdown_cancel_tasks(self, signum, frame):
+        self.log.critical("Received signalnum %s, , initiating shutdown...", signum)
         raise SystemExit(128 + signum)
 
     _atexit_ran = False
@@ -2442,6 +2489,30 @@ class JupyterHub(Application):
         loop = IOLoop()
         loop.make_current()
         loop.run_sync(self.cleanup)
+
+    async def shutdown_cancel_tasks(self, sig):
+        """Cancel all other tasks of the event loop and initiate cleanup"""
+        self.log.critical("Received signal %s, initiating shutdown...", sig.name)
+        tasks = [
+            t for t in asyncio.Task.all_tasks() if t is not asyncio.Task.current_task()
+        ]
+
+        if tasks:
+            self.log.debug("Cancelling pending tasks")
+            [t.cancel() for t in tasks]
+
+            try:
+                await asyncio.wait(tasks)
+            except asyncio.CancelledError as e:
+                self.log.debug("Caught Task CancelledError. Ignoring")
+            except StopAsyncIteration as e:
+                self.log.error("Caught StopAsyncIteration Exception", exc_info=True)
+
+            tasks = [t for t in asyncio.Task.all_tasks()]
+            for t in tasks:
+                self.log.debug("Task status: %s", t)
+        await self.cleanup()
+        asyncio.get_event_loop().stop()
 
     def stop(self):
         if not self.io_loop:
@@ -2463,11 +2534,17 @@ class JupyterHub(Application):
         self = cls.instance()
         AsyncIOMainLoop().install()
         loop = IOLoop.current()
-        loop.add_callback(self.launch_instance_async, argv)
+        task = asyncio.ensure_future(self.launch_instance_async(argv))
         try:
             loop.start()
         except KeyboardInterrupt:
             print("\nInterrupted")
+        finally:
+            if task.done():
+                # re-raise exceptions in launch_instance_async
+                task.result()
+            loop.stop()
+            loop.close()
 
 
 NewToken.classes.append(JupyterHub)
